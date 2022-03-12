@@ -8,7 +8,7 @@ docker-run:
 	seigott/tetris_docker:pytorchv1.10 
 
 train:
-	python start.py -m train -d 50 -t -1 -l 2
+	python3 start.py -m train -d 50 -t -1 -l 2
 
 predict:
-	python start.py -m predict -l 2
+	python3 start.py -m predict -l 2
