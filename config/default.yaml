@@ -1,10 +1,11 @@
 common:
   dir: outputs/${now:%Y-%m-%d-%H-%M}
   weight_path: trained_model
-  load_weight: outputs/sample/sample_weight
+  load_weight: sample_weight/dqn1/sample_weight #outputs/sample/sample_weight
   log_path: tensorboard
 model:
   name: DQNv2
+  finetune: Falsee
 state:
   dim: 4
 train:
@@ -15,26 +16,34 @@ train:
   lr_step_size: 1000
   replay_memory_size: 30000
   reward_clipping: True
-  prioritized_replay: True
-  num_epoch: 5000
+  prioritized_replay: True #True
+  multi_step_learning: False
+  multi_step_num: 3
+  num_epoch: 3000 #10000
   save_interval: 100
   num_decay_epochs: 2000
-  initial_epsilon: 1
+  initial_epsilon: 1 #1
   final_epsilon: 1e-3
   batch_size: 512
-  gamma: 0.99
+  gamma: 0.8
   target_net: True
   double_dqn: True
-  target_copy_intarval: 250
+  target_copy_intarval: 500
   max_penalty: -1
   reward_list: #These parameter are not normalized.
+<<<<<<< HEAD
     - 0 #survival
     - 100 #1block
+=======
+    - 0  #survival
+    - 100 #0 #1block
+>>>>>>> 012b3fc821054302723dc74880fb9d06b5b4f710
     - 300 #2block
     - 700 #3block
     - 1300 #4block
     - -1300 #game over
   reward_weight: #These parameter are used for DQN_v2
+<<<<<<< HEAD
     - 0.001 #bampiness
     - 0.01 #max height
     - 0.01 #hole_num
@@ -44,6 +53,11 @@ train:
     - 1000 # one line
     - 500 # two lines
     - 100 # three lines
+=======
+    - 0.01 #1 #bampiness 
+    - 0.0 #1 #max height
+    - 0.001 #1 #hole_num
+>>>>>>> 012b3fc821054302723dc74880fb9d06b5b4f710
 tetris:
   board_height: 22
   board_width: 10
