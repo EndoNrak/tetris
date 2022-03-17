@@ -5,7 +5,7 @@ common:
   log_path: tensorboard
 model:
   name: DQNv2
-  finetune: Falsee
+  finetune: False
 state:
   dim: 4
 train:
@@ -31,19 +31,13 @@ train:
   target_copy_intarval: 500
   max_penalty: -1
   reward_list: #These parameter are not normalized.
-<<<<<<< HEAD
     - 0 #survival
-    - 100 #1block
-=======
-    - 0  #survival
     - 100 #0 #1block
->>>>>>> 012b3fc821054302723dc74880fb9d06b5b4f710
     - 300 #2block
     - 700 #3block
     - 1300 #4block
     - -1300 #game over
   reward_weight: #These parameter are used for DQN_v2
-<<<<<<< HEAD
     - 0.001 #bampiness
     - 0.01 #max height
     - 0.01 #hole_num
@@ -53,11 +47,6 @@ train:
     - 1000 # one line
     - 500 # two lines
     - 100 # three lines
-=======
-    - 0.01 #1 #bampiness 
-    - 0.0 #1 #max height
-    - 0.001 #1 #hole_num
->>>>>>> 012b3fc821054302723dc74880fb9d06b5b4f710
 tetris:
   board_height: 22
   board_width: 10
