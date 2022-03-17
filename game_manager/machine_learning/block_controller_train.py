@@ -148,10 +148,13 @@ class Block_Controller(object):
         self.reward_clipping = cfg.train.reward_clipping
         self.score_list = cfg.tetris.score_list
         self.reward_list = cfg.train.reward_list
+        self.area_boarder = int(cfg.train.reward_boarder_ratio * self.height)
+        self.reward_list_2 = cfg.train.reward_list_2
         self.penalty =  self.reward_list[5]
         if self.reward_clipping:
             self.norm_num =max(max(self.reward_list),abs(self.penalty))            
             self.reward_list =[r/self.norm_num for r in self.reward_list]
+            self.reward_list_2 = [r/self.norm_num for r in self.reward_list_2]
             self.penalty /= self.norm_num
             self.penalty = min(cfg.train.max_penalty,self.penalty)
         
@@ -290,16 +293,16 @@ class Block_Controller(object):
             self.tetrominoes = 0
             
     #削除される列を数える
-    def check_cleared_rows(self,board):
+    def check_cleared_rows(self,board: np.ndarray):
         board_new = np.copy(board)
         lines = 0
         empty_line = np.array([0 for i in range(self.width)])
         for y in range(self.height - 1, -1, -1):
-            blockCount  = np.sum(board[y])
+            blockCount  = np.count_nonzero(board[y])
             if blockCount == self.width:
                 lines += 1
                 board_new = np.delete(board_new,y,0)
-                board_new = np.vstack([empty_line,board_new ])
+                board_new = np.vstack([empty_line,board_new])
         return lines,board_new
 
     #各列毎の高さの差を計算
@@ -347,10 +350,20 @@ class Block_Controller(object):
             row += 1
         return self.height - row
 
+    def get_clear_rows_reward(self, board):
+        max_height = self.get_max_height(board)
+        lines_cleared, _ = self.check_cleared_rows(board)
+        if max_height > self.area_boarder:
+            clear_rows_reward = self.reward_list_2[lines_cleared]
+        else:
+            clear_rows_reward = self.reward_list[lines_cleared]
+
+        return clear_rows_reward          
+        
     #次の状態を取得(2次元用) 
     def get_next_states_v2(self,curr_backboard,piece_id,CurrentShape_class):
         states = {}
-        
+
         if piece_id == 5:  # O piece
             num_rotations = 1
         elif piece_id == 1 or piece_id == 6 or piece_id == 7:
@@ -403,12 +416,12 @@ class Block_Controller(object):
         max_height = self.get_max_height(board)
         hole_num = self.get_holes(board)
         lines_cleared, board = self.check_cleared_rows(board)
-        reward = self.reward_list[lines_cleared] 
-        reward -= self.reward_weight[0] *bampiness 
+        reward = self.get_clear_rows_reward(board)
+        reward -= self.reward_weight[0] * bampiness 
         reward -= self.reward_weight[1] * max(0,max_height-(self.height/2))
         reward -= self.reward_weight[2] * hole_num
 
-        self.epoch_reward += reward 
+        self.epoch_reward += reward
         self.score += self.score_list[lines_cleared]
         self.cleared_lines += lines_cleared
         self.tetrominoes += 1
