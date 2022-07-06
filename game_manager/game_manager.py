@@ -15,7 +15,7 @@ import time
 import json
 import pprint
 
-def get_option(game_time, mode, drop_interval, random_seed, obstacle_height, obstacle_probability, resultlogjson, user_name, ShapeListMax):
+def get_option(game_time, mode, drop_interval, random_seed, obstacle_height, obstacle_probability, resultlogjson, train_yaml, predict_weight, user_name, ShapeListMax, BlockNumMax):
     argparser = ArgumentParser()
     argparser.add_argument('--game_time', type=int,
                            default=game_time,
@@ -38,15 +38,22 @@ def get_option(game_time, mode, drop_interval, random_seed, obstacle_height, obs
     argparser.add_argument('--resultlogjson', type=str,
                            default=resultlogjson,
                            help='result json log file path')
+    argparser.add_argument('--train_yaml', type=str,
+                           default=train_yaml,
+                           help='yaml file for machine learning')
+    argparser.add_argument('--predict_weight', type=str,
+                           default=predict_weight,
+                           help='weight file for machine learning')
     argparser.add_argument('-u', '--user_name', type=str,
                            default=user_name,
                            help='Specigy user name if necessary')
     argparser.add_argument('--ShapeListMax', type=int,
                            default=ShapeListMax,
                            help='Specigy NextShapeNumberMax if necessary')
-    argparser.add_argument('--weight',
-                           default=None,
-                           help='load model weight')
+    argparser.add_argument('--BlockNumMax', type=int,
+                           default=BlockNumMax,
+                           help='Specigy BlockNumMax if necessary')
+
     return argparser.parse_args()
 
 class Game_Manager(QMainWindow):
@@ -73,8 +80,13 @@ class Game_Manager(QMainWindow):
         self.obstacle_height = 0
         self.obstacle_probability = 0
         self.ShapeListMax = 6
+        self.BlockNumMax = -1
         self.resultlogjson = ""
         self.user_name = ""
+        self.train_yaml = None
+        self.predict_weight = None
+
+        
         args = get_option(self.game_time,
                           self.mode,
                           self.drop_interval,
@@ -82,11 +94,14 @@ class Game_Manager(QMainWindow):
                           self.obstacle_height,
                           self.obstacle_probability,
                           self.resultlogjson,
+                          self.train_yaml,
+                          self.predict_weight,
                           self.user_name,
-                          self.ShapeListMax)
+                          self.ShapeListMax,
+                          self.BlockNumMax)
         if args.game_time >= 0:
             self.game_time = args.game_time
-        if args.mode in ("keyboard", "gamepad", "sample", "train", "predict", "train_sample", "predict_sample"):
+        if args.mode in ("keyboard", "gamepad", "sample", "train", "predict", "train_sample", "predict_sample", "train_sample2", "predict_sample2"):
             self.mode = args.mode
         if args.drop_interval >= 0:
             self.drop_interval = args.drop_interval
@@ -103,7 +118,14 @@ class Game_Manager(QMainWindow):
         if args.ShapeListMax > 0:
             self.ShapeListMax = args.ShapeListMax
         
-        self.weight = args.weight
+        if args.BlockNumMax > 0:
+            self.BlockNumMax = args.BlockNumMax
+        if args.train_yaml.endswith('.yaml'):
+
+            self.train_yaml = args.train_yaml        
+        if args.predict_weight != "default":
+            self.predict_weight = args.predict_weight
+            
         self.initUI()
         
     def initUI(self):
@@ -224,8 +246,9 @@ class Game_Manager(QMainWindow):
                                   "y_moveblocknum": "none", # amount of next y movement
                                   },
                             "option":
-                                {
+                                { "reset_callback_function_addr":None,
                                   "reset_all_field": None,
+                                  "force_reset_field": None,
                                 }
                             }
                 # get nextMove from GameController
@@ -238,13 +261,20 @@ class Game_Manager(QMainWindow):
                 elif self.mode == "train_sample" or self.mode == "predict_sample":
                     # sample train/predict
                     # import block_controller_train_sample, it's necessary to install pytorch to use.
+                    from machine_learning.block_controller_train_sample import BLOCK_CONTROLLER_TRAIN_SAMPLE as BLOCK_CONTROLLER_TRAIN
+                    self.nextMove = BLOCK_CONTROLLER_TRAIN.GetNextMove(nextMove, GameStatus,yaml_file=self.train_yaml,weight=self.predict_weight)
                     
-                    self.nextMove = BLOCK_CONTROLLER_TRAIN_SAMPLE.GetNextMove(nextMove, GameStatus)
+                elif self.mode == "train_sample2" or self.mode == "predict_sample2":
+                    # sample train/predict
+                    # import block_controller_train_sample, it's necessary to install pytorch to use.
+                    from machine_learning.block_controller_train_sample2 import BLOCK_CONTROLLER_TRAIN_SAMPLE2 as BLOCK_CONTROLLER_TRAIN
+                    self.nextMove = BLOCK_CONTROLLER_TRAIN.GetNextMove(nextMove, GameStatus,yaml_file="config/train_sample2.yaml",weight=self.predict_weight)
+                    
                 elif self.mode == "train" or self.mode == "predict":
                     # train/predict
                     # import block_controller_train, it's necessary to install pytorch to use.
                     from machine_learning.block_controller_train import BLOCK_CONTROLLER_TRAIN
-                    self.nextMove = BLOCK_CONTROLLER_TRAIN.GetNextMove(nextMove, GameStatus,weight=self.weight)
+                    self.nextMove = BLOCK_CONTROLLER_TRAIN.GetNextMove(nextMove, GameStatus,yaml_file=self.train_yaml,weight=self.predict_weight)
                 else:
                     self.nextMove = BLOCK_CONTROLLER.GetNextMove(nextMove, GameStatus)
 
@@ -304,18 +334,19 @@ class Game_Manager(QMainWindow):
 
             # check reset field
             #if BOARD_DATA.currentY < 1: 
-            if BOARD_DATA.currentY < 1 or BLOCK_CONTROLLER_TRAIN.tetrominoes > BLOCK_CONTROLLER_TRAIN.max_tetrominoes:
+            if BOARD_DATA.currentY < 1 or self.nextMove["option"]["force_reset_field"] == True:
                 # if Piece cannot movedown and stack, reset field
-                #print("reset field.")
-                BLOCK_CONTROLLER_TRAIN.update()
-                BLOCK_CONTROLLER_TRAIN.reset_state()   
-                
-                self.resetfield()
+                if self.nextMove["option"]["reset_callback_function_addr"] != None:
+                    # if necessary, call reset_callback_function
+                    reset_callback_function = self.nextMove["option"]["reset_callback_function_addr"]
+                    reset_callback_function()
 
-            # reset all field if debug option is enabled
-            if self.nextMove["option"]["reset_all_field"] == True:
-                print("reset all field.")
-                self.reset_all_field()
+                if self.nextMove["option"]["reset_all_field"] == True:
+                    # reset all field if debug option is enabled
+                    print("reset all field.")
+                    self.reset_all_field()
+                else:
+                    self.resetfield()
 
             # init nextMove
             self.nextMove = None
@@ -381,6 +412,7 @@ class Game_Manager(QMainWindow):
                         "score":"none",
                         "line":"none",
                         "block_index":"none",
+                        "block_num_max":"none",
                         "mode":"none",
                       },
                   "debug_info":
@@ -471,6 +503,7 @@ class Game_Manager(QMainWindow):
         status["judge_info"]["score"] = self.tboard.score
         status["judge_info"]["line"] = self.tboard.line
         status["judge_info"]["block_index"] = self.block_index
+        status["judge_info"]["block_num_max"] = self.BlockNumMax
         status["judge_info"]["mode"] = self.mode
         ## debug_info
         status["debug_info"]["dropdownscore"] = self.tboard.dropdownscore
@@ -561,6 +594,7 @@ class Game_Manager(QMainWindow):
                         "score":"none",
                         "line":"none",
                         "block_index":"none",
+                        "block_num_max":"none",
                         "mode":"none",
                       },
                   }
@@ -595,6 +629,7 @@ class Game_Manager(QMainWindow):
         status["judge_info"]["score"] = self.tboard.score
         status["judge_info"]["line"] = self.tboard.line
         status["judge_info"]["block_index"] = self.block_index
+        status["judge_info"]["block_num_max"] = self.BlockNumMax
         status["judge_info"]["mode"] = self.mode
         return json.dumps(status)
 
@@ -756,6 +791,12 @@ class Board(QFrame):
         elapsed_time = round(time.time() - self.start_time, 3)
         elapsed_time_str = str(elapsed_time)
         status_str = "score:" + score_str + ",line:" + line_str + ",gameover:" + reset_cnt_str + ",time[s]:" + elapsed_time_str
+
+        # get gamestatus info
+        GameStatus = GAME_MANEGER.getGameStatus()
+        current_block_index = GameStatus["judge_info"]["block_index"]
+        BlockNumMax = GameStatus["judge_info"]["block_num_max"]
+
         # print string to status bar
         self.msg2Statusbar.emit(status_str)
         self.update()
@@ -765,9 +806,12 @@ class Board(QFrame):
             pass
             #print("game_time: {}".format(self.game_time))
             #print("endless loop")
-        elif self.game_time >= 0 and elapsed_time > self.game_time - 0.5:
+        elif (self.game_time >= 0 and elapsed_time > self.game_time - 0.5) or (current_block_index == BlockNumMax):
             # finish game.
-            print("game finish!! elapsed time: " + elapsed_time_str + "/game_time: " + str(self.game_time))
+            # 1. if elapsed_time beyonds given game_time.
+            # 2. if current_block_index beyonds given BlockNumMax.
+            print("game finish!! elapsed time: " + elapsed_time_str + "/game_time: " + str(self.game_time) \
+                  + ", " + "current_block_index: " + str(current_block_index) + "/BlockNumMax: " + str(BlockNumMax))
             print("")
             print("##### YOUR_RESULT #####")
             print(status_str)
